@@ -1,0 +1,55 @@
+{
+  "name": "flaky-workflows",
+  "description": "Some workflows fail intermittently whatever the change, and go through bad stretches where recent history matters.",
+  "workflows": [
+    {
+      "name": "build",
+      "weight": 0.3,
+      "flakiness": 0.0,
+      "base_seconds": 260
+    },
+    {
+      "name": "e2e-browser",
+      "weight": 0.3,
+      "flakiness": 1.1,
+      "base_seconds": 900
+    },
+    {
+      "name": "unit-tests",
+      "weight": 0.25,
+      "flakiness": 0.2,
+      "base_seconds": 400
+    },
+    {
+      "name": "deploy-preview",
+      "weight": 0.15,
+      "flakiness": 0.7,
+      "base_seconds": 330
+    }
+  ],
+  "authors": 7,
+  "inter_arrival_min": 26,
+  "base_fail_rate": 0.09,
+  "p_dependencies": 0.15,
+  "p_ci_config": 0.05,
+  "base_queue": 3,
+  "effects": {
+    "dependencies": 0.4,
+    "ci_config": 0.5,
+    "size": 0.2,
+    "dependencies_x_large": 0.8,
+    "queue_over_threshold": 0.0,
+    "queue_threshold": 12,
+    "peak_hours": 0.2,
+    "author_spread": 0.3,
+    "broken_state": 3.0,
+    "ci_config_x_flaky": 2.4,
+    "peak_x_busy": 0.6
+  },
+  "broken": {
+    "p_on": 0.03,
+    "p_off": 0.1
+  },
+  "drift_per_1000_runs": 0.0,
+  "noise": 0.3
+}

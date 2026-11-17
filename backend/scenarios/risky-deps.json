@@ -1,0 +1,49 @@
+{
+  "name": "risky-deps",
+  "description": "Dependency and CI-config changes are risky, and large changes to dependencies are riskier still.",
+  "workflows": [
+    {
+      "name": "build",
+      "weight": 0.4,
+      "flakiness": 0.1,
+      "base_seconds": 300
+    },
+    {
+      "name": "integration-tests",
+      "weight": 0.35,
+      "flakiness": 0.3,
+      "base_seconds": 780
+    },
+    {
+      "name": "package-audit",
+      "weight": 0.25,
+      "flakiness": 0.0,
+      "base_seconds": 150
+    }
+  ],
+  "authors": 8,
+  "inter_arrival_min": 30,
+  "base_fail_rate": 0.1,
+  "p_dependencies": 0.28,
+  "p_ci_config": 0.08,
+  "base_queue": 3,
+  "effects": {
+    "dependencies": 0.5,
+    "ci_config": 0.6,
+    "size": 0.25,
+    "dependencies_x_large": 2.4,
+    "queue_over_threshold": 0.0,
+    "queue_threshold": 12,
+    "peak_hours": 0.15,
+    "author_spread": 0.35,
+    "broken_state": 2.2,
+    "ci_config_x_flaky": 0.8,
+    "peak_x_busy": 0.6
+  },
+  "broken": {
+    "p_on": 0.01,
+    "p_off": 0.15
+  },
+  "drift_per_1000_runs": 0.1,
+  "noise": 0.3
+}

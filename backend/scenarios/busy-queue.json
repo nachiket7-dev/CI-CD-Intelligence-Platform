@@ -1,0 +1,49 @@
+{
+  "name": "busy-queue",
+  "description": "A busy shared runner pool. Failures and timeouts climb once the queue gets long, especially in working hours.",
+  "workflows": [
+    {
+      "name": "build",
+      "weight": 0.4,
+      "flakiness": 0.1,
+      "base_seconds": 320
+    },
+    {
+      "name": "unit-tests",
+      "weight": 0.4,
+      "flakiness": 0.2,
+      "base_seconds": 520
+    },
+    {
+      "name": "docs",
+      "weight": 0.2,
+      "flakiness": -0.2,
+      "base_seconds": 120
+    }
+  ],
+  "authors": 10,
+  "inter_arrival_min": 14,
+  "base_fail_rate": 0.08,
+  "p_dependencies": 0.14,
+  "p_ci_config": 0.04,
+  "base_queue": 5,
+  "effects": {
+    "dependencies": 0.5,
+    "ci_config": 0.6,
+    "size": 0.2,
+    "dependencies_x_large": 1.0,
+    "queue_over_threshold": 2.6,
+    "queue_threshold": 11,
+    "peak_hours": 0.5,
+    "author_spread": 0.25,
+    "broken_state": 2.0,
+    "ci_config_x_flaky": 0.8,
+    "peak_x_busy": 2.6
+  },
+  "broken": {
+    "p_on": 0.008,
+    "p_off": 0.16
+  },
+  "drift_per_1000_runs": 0.15,
+  "noise": 0.3
+}

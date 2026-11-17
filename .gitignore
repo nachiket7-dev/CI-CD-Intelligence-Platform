@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.hallmark-skill/
+.hallmark/
+.env
+*.log
+.DS_Store

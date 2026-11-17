@@ -1,0 +1,49 @@
+{
+  "name": "stable",
+  "description": "A calm repo. Failures are rare and mostly random, with only a mild link to change size.",
+  "workflows": [
+    {
+      "name": "build",
+      "weight": 0.45,
+      "flakiness": 0.0,
+      "base_seconds": 240
+    },
+    {
+      "name": "unit-tests",
+      "weight": 0.4,
+      "flakiness": 0.1,
+      "base_seconds": 420
+    },
+    {
+      "name": "lint",
+      "weight": 0.15,
+      "flakiness": -0.3,
+      "base_seconds": 90
+    }
+  ],
+  "authors": 6,
+  "inter_arrival_min": 38,
+  "base_fail_rate": 0.07,
+  "p_dependencies": 0.12,
+  "p_ci_config": 0.03,
+  "base_queue": 2,
+  "effects": {
+    "dependencies": 0.5,
+    "ci_config": 0.6,
+    "size": 0.25,
+    "dependencies_x_large": 1.2,
+    "queue_over_threshold": 0.0,
+    "queue_threshold": 12,
+    "peak_hours": 0.1,
+    "author_spread": 0.25,
+    "broken_state": 2.0,
+    "ci_config_x_flaky": 0.8,
+    "peak_x_busy": 0.6
+  },
+  "broken": {
+    "p_on": 0.006,
+    "p_off": 0.18
+  },
+  "drift_per_1000_runs": 0.05,
+  "noise": 0.3
+}
