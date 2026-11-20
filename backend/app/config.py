@@ -22,9 +22,22 @@ class Settings:
     brier_tolerance: float = 0.002  # candidate Brier may be at most this much worse
     rolling_window: int = 20  # how many earlier finished runs feed the rolling features
 
+    # Optional MLflow tracking (off by default, local file store, no server)
+    enable_mlflow: bool = False
+    mlflow_tracking_uri: str | None = None
+    mlflow_experiment_name: str = "ci-cd-intelligence"
+
     @classmethod
     def from_env(cls) -> Settings:
         d = cls()
+        enable_mlflow = os.getenv(
+            "CI_INTEL_ENABLE_MLFLOW", os.getenv("CI_ENABLE_MLFLOW", "false")
+        ).lower() in ("true", "1", "yes")
+        mlflow_tracking_uri = os.getenv("CI_INTEL_MLFLOW_TRACKING_URI", os.getenv("MLFLOW_TRACKING_URI"))
+        mlflow_experiment_name = os.getenv(
+            "CI_INTEL_MLFLOW_EXPERIMENT_NAME",
+            os.getenv("MLFLOW_EXPERIMENT_NAME", d.mlflow_experiment_name),
+        )
         return cls(
             database_url=os.getenv("CI_INTEL_DATABASE_URL", d.database_url),
             models_dir=Path(os.getenv("CI_INTEL_MODELS_DIR", str(d.models_dir))),
@@ -34,4 +47,7 @@ class Settings:
             gate_margin=float(os.getenv("CI_INTEL_GATE_MARGIN", d.gate_margin)),
             brier_tolerance=float(os.getenv("CI_INTEL_BRIER_TOLERANCE", d.brier_tolerance)),
             rolling_window=int(os.getenv("CI_INTEL_ROLLING_WINDOW", d.rolling_window)),
+            enable_mlflow=enable_mlflow,
+            mlflow_tracking_uri=mlflow_tracking_uri,
+            mlflow_experiment_name=mlflow_experiment_name,
         )
