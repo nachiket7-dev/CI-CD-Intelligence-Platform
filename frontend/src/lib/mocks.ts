@@ -5,7 +5,21 @@
  * thing. Everything here is SAMPLE data: totals add up and dates sequence, but none of it is a
  * measurement. The UI shows a "sample data" banner whenever mocks are on.
  */
-import type { Model, ModelScores, Prediction, Report, Run, RunDetail, Signal, Tracker } from "./types";
+import type {
+  AblationReport,
+  CandidateKind,
+  DriftReport,
+  Model,
+  ModelScores,
+  Prediction,
+  RealDataReport,
+  Report,
+  Run,
+  RunDetail,
+  Signal,
+  SweepReport,
+  Tracker,
+} from "./types";
 
 const wait = (ms = 220) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -35,13 +49,23 @@ interface MockRun extends Run {
   outcome: RunDetail["outcome"];
 }
 
-function scores(prAuc: number, brier: number, recall: number | null, n = 96): ModelScores {
-  return { pr_auc: prAuc, brier, prevalence: 0.19, recall_at_precision: recall, precision_target: 0.5, n };
+function scores(prAuc: number, brier: number, recall: number | null, n = 96, brierUncalibrated?: number): ModelScores {
+  return {
+    pr_auc: prAuc,
+    brier,
+    prevalence: 0.19,
+    recall_at_precision: recall,
+    precision_target: 0.5,
+    n,
+    brier_uncalibrated: brierUncalibrated ?? Math.round((brier + 0.007) * 10000) / 10000,
+  };
 }
 
 function makeModel(id: number, algo: Model["algo"], status: Model["status"]): Model {
   const weak = algo === "weak_stump";
-  const candidate = weak ? scores(0.19, 0.157, null) : scores(0.35, 0.145, 0.14);
+  const candidate = weak
+    ? scores(0.19, 0.157, null, 96, 0.162)
+    : scores(0.35, 0.145, 0.14, 96, 0.152);
   const passed = !weak;
   return {
     id,
@@ -198,8 +222,16 @@ function report(model: Model): Report {
     thresholds: [0.1, 0.2, 0.3, 0.4, 0.5].map((t, i) => ({ threshold: t, precision: 0.22 + i * 0.07, recall: 0.9 - i * 0.17, flagged_share: 0.8 - i * 0.16 })),
     pr_curves: { majority: pr(0.19, 0), logreg: pr(0.62, 3.2), candidate: pr(weak ? 0.2 : 0.66, weak ? 6 : 3.0) },
     reliability: { candidate: rel(weak ? 0.5 : 0.12), logreg: rel(0.2) },
+    generalisation: [
+      { scenario: "busy-queue", majority_pr_auc: 0.182, logreg_pr_auc: 0.315, candidate_pr_auc: weak ? 0.183 : 0.328 },
+      { scenario: "flaky-workflows", majority_pr_auc: 0.21, logreg_pr_auc: 0.322, candidate_pr_auc: weak ? 0.195 : 0.339 },
+      { scenario: "risky-deps", majority_pr_auc: 0.188, logreg_pr_auc: 0.334, candidate_pr_auc: weak ? 0.19 : 0.345 },
+      { scenario: "stable", majority_pr_auc: 0.185, logreg_pr_auc: 0.351, candidate_pr_auc: weak ? 0.189 : 0.362 },
+    ],
   };
 }
+
+export const SAMPLE_REPORT: Report = report(models[1]);
 
 function tracker(): Tracker {
   const scored = runs.filter((r) => r.outcome && r.prediction);
@@ -217,6 +249,370 @@ function tracker(): Tracker {
     recent: scored.slice(-12).reverse().map((r) => ({ run_id: r.id, probability: r.prediction!.probability, failed: r.outcome!.failed, predicted_at: r.prediction!.predicted_at, recorded_at: r.outcome!.recorded_at })),
   };
 }
+
+export function makeMockSweep(candidate: CandidateKind = "hist_gb", seeds = 5, runsPerScenario = 1000): SweepReport {
+  const weak = candidate === "weak_stump";
+  return {
+    id: 1,
+    created_at: iso(Date.now()),
+    seeds,
+    runs_per_scenario: runsPerScenario,
+    candidate,
+    precision_target: 0.5,
+    gate_pass_rate: weak ? 0.0 : 1.0,
+    passed_seeds: weak ? 0 : seeds,
+    metrics: {
+      majority: {
+        pr_auc: { mean: 0.191, spread: 0.002 },
+        brier: { mean: 0.155, spread: 0.001 },
+        recall: { mean: null, spread: null },
+      },
+      logreg: {
+        pr_auc: { mean: 0.342, spread: 0.015 },
+        brier: { mean: 0.147, spread: 0.002 },
+        recall: { mean: 0.128, spread: 0.024 },
+      },
+      candidate: {
+        pr_auc: weak ? { mean: 0.19, spread: 0.005 } : { mean: 0.354, spread: 0.012 },
+        brier: weak ? { mean: 0.156, spread: 0.003 } : { mean: 0.144, spread: 0.002 },
+        recall: weak ? { mean: null, spread: null } : { mean: 0.142, spread: 0.018 },
+      },
+    },
+    leave_one_out: [
+      {
+        scenario: "busy-queue",
+        majority_pr_auc: { mean: 0.182, spread: 0.004 },
+        logreg_pr_auc: { mean: 0.315, spread: 0.012 },
+        candidate_pr_auc: weak ? { mean: 0.183, spread: 0.006 } : { mean: 0.328, spread: 0.014 },
+      },
+      {
+        scenario: "flaky-workflows",
+        majority_pr_auc: { mean: 0.21, spread: 0.005 },
+        logreg_pr_auc: { mean: 0.322, spread: 0.018 },
+        candidate_pr_auc: weak ? { mean: 0.195, spread: 0.008 } : { mean: 0.339, spread: 0.016 },
+      },
+      {
+        scenario: "risky-deps",
+        majority_pr_auc: { mean: 0.188, spread: 0.003 },
+        logreg_pr_auc: { mean: 0.334, spread: 0.014 },
+        candidate_pr_auc: weak ? { mean: 0.19, spread: 0.005 } : { mean: 0.345, spread: 0.011 },
+      },
+      {
+        scenario: "stable",
+        majority_pr_auc: { mean: 0.185, spread: 0.003 },
+        logreg_pr_auc: { mean: 0.351, spread: 0.011 },
+        candidate_pr_auc: weak ? { mean: 0.189, spread: 0.004 } : { mean: 0.362, spread: 0.015 },
+      },
+    ],
+  };
+}
+
+export const SAMPLE_SWEEP: SweepReport = makeMockSweep("hist_gb");
+let latestSweep: SweepReport | null = SAMPLE_SWEEP;
+
+export function makeMockAblation(
+  candidate: CandidateKind = "hist_gb",
+  seeds = 5,
+  runsPerScenario = 1000,
+): AblationReport {
+  return {
+    id: 1,
+    created_at: iso(Date.now()),
+    seeds,
+    runs_per_scenario: runsPerScenario,
+    candidate,
+    full_model_pr_auc: { mean: 0.354, spread: 0.012 },
+    groups: [
+      {
+        group_id: "rolling_history",
+        name: "Rolling history features",
+        features: ["workflow_fail_rate_recent", "hours_since_last_failure", "author_recent_fail_rate"],
+        pr_auc: { mean: 0.312, spread: 0.015 },
+        delta_pr_auc: { mean: -0.042, spread: 0.008 },
+      },
+      {
+        group_id: "queue_and_timing",
+        name: "Queue and timing",
+        features: ["queue_depth_at_start", "hour_of_day", "day_of_week"],
+        pr_auc: { mean: 0.341, spread: 0.011 },
+        delta_pr_auc: { mean: -0.013, spread: 0.005 },
+      },
+      {
+        group_id: "change_size",
+        name: "Change size",
+        features: ["files_changed", "lines_changed"],
+        pr_auc: { mean: 0.338, spread: 0.014 },
+        delta_pr_auc: { mean: -0.016, spread: 0.006 },
+      },
+      {
+        group_id: "dependency_and_ci_flags",
+        name: "Dependency and CI-config flags",
+        features: ["touches_dependencies", "touches_ci_config"],
+        pr_auc: { mean: 0.348, spread: 0.013 },
+        delta_pr_auc: { mean: -0.006, spread: 0.003 },
+      },
+    ],
+    deliberate_leak: {
+      forbidden_field: "duration_s",
+      contract_caught: true,
+      contract_error: "'duration_s' is only known after the run (forbidden)",
+      gate_caught: true,
+      gate_passed: false,
+      gate_violations: ["'duration_s' is only known after the run (forbidden)"],
+    },
+  };
+}
+
+export const SAMPLE_ABLATION: AblationReport = makeMockAblation("hist_gb");
+let latestAblation: AblationReport | null = SAMPLE_ABLATION;
+
+export const SAMPLE_REALDATA_REPORT: RealDataReport = {
+  id: 1,
+  created_at: iso(Date.now()),
+  dataset_name: "Mendeley Data: GitHub Actions CI/CD failure dataset (GADFPD)",
+  doi: "10.17632/mggwn7rj9f.1",
+  licence: "CC BY 4.0",
+  total_rows: 303079,
+  candidate: "hist_gb",
+  metrics: {
+    majority: scores(0.185, 0.158, null),
+    logreg: scores(0.338, 0.149, 0.12),
+    candidate: scores(0.358, 0.143, 0.15, 96, 0.151),
+  },
+  gate: {
+    passed: true,
+    reason: "Passed all gate checks.",
+    checks: [
+      { name: "beats_baseline_pr_auc", passed: true, detail: "Candidate PR-AUC 0.358 vs best baseline 0.338: gain +0.020, required +0.010." },
+      { name: "brier_not_worse", passed: true, detail: "Candidate Brier 0.1430 vs best baseline 0.1490." },
+      { name: "leakage_contract", passed: true, detail: "Clean: no columns violate contract.py." },
+    ],
+  },
+  thresholds: [
+    { threshold: 0.1, precision: 0.24, recall: 0.88, flagged_share: 0.76 },
+    { threshold: 0.2, precision: 0.32, recall: 0.72, flagged_share: 0.52 },
+    { threshold: 0.3, precision: 0.41, recall: 0.58, flagged_share: 0.38 },
+    { threshold: 0.4, precision: 0.48, recall: 0.44, flagged_share: 0.25 },
+    { threshold: 0.5, precision: 0.54, recall: 0.32, flagged_share: 0.16 },
+  ],
+  importances: {
+    workflow_fail_rate_recent: 0.124,
+    lines_changed: 0.045,
+    files_changed: 0.038,
+    hours_since_last_failure: 0.022,
+    author_recent_fail_rate: 0.015,
+    hour_of_day: 0.008,
+  },
+  available_features: [
+    "repo",
+    "workflow_name",
+    "trigger_type",
+    "files_changed",
+    "lines_changed",
+    "workflow_fail_rate_recent",
+    "hours_since_last_failure",
+    "author_recent_fail_rate",
+    "hour_of_day",
+    "day_of_week",
+  ],
+  missing_contract_features: [
+    {
+      feature: "touches_dependencies",
+      reason: "Commit churn is recorded, but not individual file paths or diffs.",
+    },
+    {
+      feature: "touches_ci_config",
+      reason: "Changes to .github/workflows/* are not flagged in commit metadata.",
+    },
+    {
+      feature: "queue_depth_at_start",
+      reason: "Runner queue depth at start instant is not available in the dataset.",
+    },
+  ],
+  dropped_columns: [
+    "duration",
+    "status",
+    "commit_sha",
+    "head_sha",
+    "node_id",
+    "message",
+    "msg_len",
+    "is_merge",
+    "num_parents",
+    "additions",
+    "deletions",
+    "author_name",
+    "author_email",
+    "committer_name",
+    "committer_email",
+    "triggering_actor_login",
+    "time_since_last_commit",
+    "timestamp_raw",
+    "commit_date",
+    "timestamp",
+    "run_attempt",
+    "run_number",
+    "head_branch",
+  ],
+};
+let latestRealdata: RealDataReport | null = SAMPLE_REALDATA_REPORT;
+
+export const SAMPLE_DRIFT_REPORT: DriftReport = {
+  model_version: "v004-hist_gb",
+  reference_window: { from: "2026-01-05T08:13:48", to: "2026-01-15T07:39:41" },
+  live_window: { from: "2026-01-31T00:16:22", to: "2026-02-02T16:45:10" },
+  n_reference: 2400,
+  n_live: 100,
+  overall_status: "shifted",
+  numeric_features: [
+    {
+      feature: "queue_depth_at_start",
+      psi: 0.428,
+      ks_statistic: 0.612,
+      ks_pvalue: 0.000001,
+      status: "shifted",
+      reference_mean: 2.85,
+      live_mean: 18.24,
+      reference_std: 1.94,
+      live_std: 4.12,
+      recommendation: "Significant shift. Retrain the model on recent data or check CI environment changes.",
+    },
+    {
+      feature: "workflow_fail_rate_recent",
+      psi: 0.142,
+      ks_statistic: 0.185,
+      ks_pvalue: 0.0215,
+      status: "watch",
+      reference_mean: 0.189,
+      live_mean: 0.245,
+      reference_std: 0.12,
+      live_std: 0.15,
+      recommendation: "Moderate shift detected. Monitor failure rate and model predictions closely.",
+    },
+    {
+      feature: "hours_since_last_failure",
+      psi: 0.082,
+      ks_statistic: 0.112,
+      ks_pvalue: 0.142,
+      status: "stable",
+      reference_mean: 14.2,
+      live_mean: 12.8,
+      reference_std: 10.5,
+      live_std: 9.8,
+      recommendation: "Distribution matches training. No action needed.",
+    },
+    {
+      feature: "files_changed",
+      psi: 0.045,
+      ks_statistic: 0.078,
+      ks_pvalue: 0.451,
+      status: "stable",
+      reference_mean: 5.6,
+      live_mean: 5.4,
+      reference_std: 4.2,
+      live_std: 3.9,
+      recommendation: "Distribution matches training. No action needed.",
+    },
+    {
+      feature: "lines_changed",
+      psi: 0.038,
+      ks_statistic: 0.065,
+      ks_pvalue: 0.628,
+      status: "stable",
+      reference_mean: 148.5,
+      live_mean: 142.1,
+      reference_std: 195.0,
+      live_std: 182.4,
+      recommendation: "Distribution matches training. No action needed.",
+    },
+    {
+      feature: "author_recent_fail_rate",
+      psi: 0.035,
+      ks_statistic: 0.061,
+      ks_pvalue: 0.695,
+      status: "stable",
+      reference_mean: 0.192,
+      live_mean: 0.188,
+      reference_std: 0.11,
+      live_std: 0.105,
+      recommendation: "Distribution matches training. No action needed.",
+    },
+    {
+      feature: "touches_dependencies",
+      psi: 0.018,
+      ks_statistic: 0.042,
+      ks_pvalue: 0.945,
+      status: "stable",
+      reference_mean: 0.18,
+      live_mean: 0.20,
+      reference_std: 0.38,
+      live_std: 0.40,
+      recommendation: "Distribution matches training. No action needed.",
+    },
+    {
+      feature: "touches_ci_config",
+      psi: 0.012,
+      ks_statistic: 0.025,
+      ks_pvalue: 0.999,
+      status: "stable",
+      reference_mean: 0.10,
+      live_mean: 0.11,
+      reference_std: 0.30,
+      live_std: 0.31,
+      recommendation: "Distribution matches training. No action needed.",
+    },
+    {
+      feature: "hour_of_day",
+      psi: 0.052,
+      ks_statistic: 0.091,
+      ks_pvalue: 0.312,
+      status: "stable",
+      reference_mean: 13.4,
+      live_mean: 14.1,
+      reference_std: 4.8,
+      live_std: 4.6,
+      recommendation: "Distribution matches training. No action needed.",
+    },
+    {
+      feature: "day_of_week",
+      psi: 0.048,
+      ks_statistic: 0.084,
+      ks_pvalue: 0.385,
+      status: "stable",
+      reference_mean: 2.1,
+      live_mean: 2.3,
+      reference_std: 1.4,
+      live_std: 1.5,
+      recommendation: "Distribution matches training. No action needed.",
+    },
+  ],
+  categorical_features: [
+    {
+      feature: "trigger_type",
+      psi: 0.022,
+      status: "stable",
+      recommendation: "Distribution matches training. No action needed.",
+      shares: [
+        { category: "push", reference_count: 1440, reference_share: 0.60, live_count: 58, live_share: 0.58, delta: -0.02 },
+        { category: "pull_request", reference_count: 720, reference_share: 0.30, live_count: 32, live_share: 0.32, delta: 0.02 },
+        { category: "schedule", reference_count: 240, reference_share: 0.10, live_count: 10, live_share: 0.10, delta: 0.00 },
+      ],
+    },
+    {
+      feature: "repo",
+      psi: 0.018,
+      status: "stable",
+      recommendation: "Distribution matches training. No action needed.",
+      shares: [
+        { category: "busy-queue", reference_count: 600, reference_share: 0.25, live_count: 26, live_share: 0.26, delta: 0.01 },
+        { category: "flaky-workflows", reference_count: 600, reference_share: 0.25, live_count: 24, live_share: 0.24, delta: -0.01 },
+        { category: "risky-deps", reference_count: 600, reference_share: 0.25, live_count: 25, live_share: 0.25, delta: 0.00 },
+        { category: "stable", reference_count: 600, reference_share: 0.25, live_count: 25, live_share: 0.25, delta: 0.00 },
+      ],
+    },
+  ],
+};
+let latestDrift: DriftReport | null = SAMPLE_DRIFT_REPORT;
 
 function fail(status: number, message: string): never {
   throw Object.assign(new Error(message), { status });
@@ -261,9 +657,15 @@ export async function mockRequest<T>(method: "GET" | "POST", path: string, body?
 
   if (method === "POST" && p === "/simulate") return out(counts(runs));
   if (method === "POST" && p === "/simulate/live") {
-    const count = (body as { count?: number } | undefined)?.count ?? 5;
+    const { count = 5, drift = false } = (body as { count?: number; drift?: boolean } | undefined) ?? {};
     const last = new Date(`${runs[runs.length - 1].started_at}Z`).getTime();
-    const created = Array.from({ length: count }, (_, i) => addRun(last + (i + 1) * 23 * 60_000, true));
+    const created = Array.from({ length: count }, (_, i) => {
+      const r = addRun(last + (i + 1) * 23 * 60_000, true);
+      if (drift) {
+        r.queue_depth_at_start = Math.round(18 + Math.random() * 8);
+      }
+      return r;
+    });
     if (models.some((m) => m.status === "active")) created.forEach(score);
     return out(created.map(detail));
   }
@@ -291,6 +693,36 @@ export async function mockRequest<T>(method: "GET" | "POST", path: string, body?
     const model = rep[1] === "latest" ? models.slice().sort((a, b) => b.id - a.id)[0] : models.find((m) => m.id === Number(rep[1]));
     if (!model) fail(404, "No evaluation report yet. Train a model first.");
     return out(report(model));
+  }
+  if (method === "GET" && (p === "/reports/sweeps/latest" || p === "/reports/sweep/latest")) {
+    if (!latestSweep) fail(404, "No seed sweep report yet. Run a sweep first.");
+    return out(latestSweep);
+  }
+  if (method === "POST" && p === "/reports/sweep") {
+    const candidateKind = (body as { candidate?: CandidateKind } | undefined)?.candidate ?? "hist_gb";
+    const seedsCount = (body as { seeds?: number } | undefined)?.seeds ?? 5;
+    const runsCount = (body as { runs_per_scenario?: number } | undefined)?.runs_per_scenario ?? 1000;
+    latestSweep = makeMockSweep(candidateKind, seedsCount, runsCount);
+    return out(latestSweep);
+  }
+  if (method === "GET" && p === "/reports/ablation") {
+    if (!latestAblation) fail(404, "No ablation report yet. Run an ablation study first.");
+    return out(latestAblation);
+  }
+  if (method === "POST" && p === "/reports/ablation") {
+    const candidateKind = (body as { candidate?: CandidateKind } | undefined)?.candidate ?? "hist_gb";
+    const seedsCount = (body as { seeds?: number } | undefined)?.seeds ?? 5;
+    const runsCount = (body as { runs_per_scenario?: number } | undefined)?.runs_per_scenario ?? 1000;
+    latestAblation = makeMockAblation(candidateKind, seedsCount, runsCount);
+    return out(latestAblation);
+  }
+  if (method === "GET" && p === "/reports/realdata") {
+    if (!latestRealdata) fail(404, "No real data check report yet.");
+    return out(latestRealdata);
+  }
+  if (method === "GET" && p.startsWith("/drift")) {
+    if (!latestDrift) fail(404, "No live runs found after model evaluation window.");
+    return out(latestDrift);
   }
   if (method === "GET" && p === "/tracker") return out(tracker());
 

@@ -9,7 +9,13 @@ import type {
   RunDetail,
   RunList,
   RunsQuery,
+  SweepReport,
+  SweepRequest,
   Tracker,
+  AblationReport,
+  AblationRequest,
+  RealDataReport,
+  DriftReport,
 } from "./types";
 
 /** Set VITE_USE_MOCKS=true (npm run dev:mock) to build UI without the backend running. */
@@ -67,10 +73,47 @@ export const api = {
   finishRun: (id: number) => request<RunDetail>("POST", `/runs/${id}/finish`),
   simulate: (body: { runs_per_scenario?: number; seed?: number; pending?: number } = {}) =>
     request<RunCounts>("POST", "/simulate", body),
-  liveRuns: (count = 5) => request<Run[]>("POST", "/simulate/live", { count }),
+  liveRuns: (options: number | { count?: number; drift?: boolean } = 5) => {
+    const body = typeof options === "number" ? { count: options } : options;
+    return request<Run[]>("POST", "/simulate/live", body);
+  },
   models: () => request<Model[]>("GET", "/models"),
   train: (candidate: CandidateKind, seed = 42) => request<Model>("POST", "/models/train", { candidate, seed }),
   promote: (id: number) => request<Model>("POST", `/models/${id}/promote`),
   report: (modelId?: number) => request<Report>("GET", modelId ? `/reports/${modelId}` : "/reports/latest"),
   tracker: () => request<Tracker>("GET", "/tracker"),
+  latestSweep: async () => {
+    try {
+      return await request<SweepReport | null>("GET", "/reports/sweeps/latest");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return null;
+      throw err;
+    }
+  },
+  runSweep: (body: SweepRequest = {}) => request<SweepReport>("POST", "/reports/sweep", body),
+  latestAblation: async () => {
+    try {
+      return await request<AblationReport | null>("GET", "/reports/ablation");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return null;
+      throw err;
+    }
+  },
+  runAblation: (body: AblationRequest = {}) => request<AblationReport>("POST", "/reports/ablation", body),
+  latestRealdata: async () => {
+    try {
+      return await request<RealDataReport | null>("GET", "/reports/realdata");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return null;
+      throw err;
+    }
+  },
+  drift: async (recentRuns = 100) => {
+    try {
+      return await request<DriftReport | null>("GET", `/drift${query({ recent_runs: recentRuns })}`);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return null;
+      throw err;
+    }
+  },
 };

@@ -106,6 +106,13 @@ export interface Model {
   importances: Record<string, number>;
 }
 
+export interface GeneralisationRow {
+  scenario: string;
+  majority_pr_auc: number;
+  logreg_pr_auc: number;
+  candidate_pr_auc: number;
+}
+
 export interface Report {
   model: Model;
   precision_target: number;
@@ -113,6 +120,7 @@ export interface Report {
   thresholds: { threshold: number; precision: number; recall: number; flagged_share: number }[];
   pr_curves: Record<"majority" | "logreg" | "candidate", { recall: number; precision: number }[]>;
   reliability: Record<"candidate" | "logreg", { mean_predicted: number; observed_rate: number; count: number }[]>;
+  generalisation?: GeneralisationRow[];
 }
 
 export interface Tracker {
@@ -136,4 +144,158 @@ export interface RunsQuery {
   repo?: string;
   limit?: number;
   offset?: number;
+}
+
+export interface MetricSpread {
+  mean: number | null;
+  spread: number | null;
+}
+
+export interface ModelSweepScores {
+  pr_auc: MetricSpread;
+  brier: MetricSpread;
+  recall: MetricSpread;
+  recall_at_precision?: MetricSpread | null;
+}
+
+export interface LeaveOneOutRow {
+  scenario: string;
+  majority_pr_auc: MetricSpread;
+  logreg_pr_auc: MetricSpread;
+  candidate_pr_auc: MetricSpread;
+}
+
+export interface SweepReport {
+  id: number;
+  created_at: string;
+  seeds: number;
+  runs_per_scenario: number;
+  candidate: CandidateKind | string;
+  precision_target: number;
+  gate_pass_rate: number;
+  passed_seeds: number;
+  metrics: {
+    majority: ModelSweepScores;
+    logreg: ModelSweepScores;
+    candidate: ModelSweepScores;
+  };
+  leave_one_out?: LeaveOneOutRow[];
+}
+
+export interface SweepRequest {
+  seeds?: number;
+  runs_per_scenario?: number;
+  candidate?: CandidateKind;
+}
+
+export interface AblationRow {
+  group_id: string;
+  name: string;
+  features: string[];
+  pr_auc: MetricSpread;
+  delta_pr_auc: MetricSpread;
+}
+
+export interface DeliberateLeakReport {
+  forbidden_field: string;
+  contract_caught: boolean;
+  contract_error: string;
+  gate_caught: boolean;
+  gate_passed: boolean;
+  gate_violations: string[];
+}
+
+export interface AblationReport {
+  id: number;
+  created_at: string;
+  seeds: number;
+  runs_per_scenario: number;
+  candidate: CandidateKind | string;
+  full_model_pr_auc: MetricSpread;
+  groups: AblationRow[];
+  deliberate_leak: DeliberateLeakReport;
+}
+
+export interface AblationRequest {
+  seeds?: number;
+  runs_per_scenario?: number;
+  candidate?: CandidateKind;
+}
+
+export interface RealDataMissingFeature {
+  feature: string;
+  reason: string;
+}
+
+export interface RealDataReport {
+  id: number;
+  created_at: string;
+  dataset_name: string;
+  doi: string;
+  licence: string;
+  total_rows: number;
+  candidate: CandidateKind | string;
+  metrics: {
+    majority: ModelScores;
+    logreg: ModelScores;
+    candidate: ModelScores;
+  };
+  gate: {
+    passed: boolean;
+    reason: string;
+    checks: GateCheck[];
+  };
+  thresholds: {
+    threshold: number;
+    precision: number;
+    recall: number;
+    flagged_share: number;
+  }[];
+  importances: Record<string, number>;
+  available_features: string[];
+  missing_contract_features: RealDataMissingFeature[];
+  dropped_columns: string[];
+}
+
+export type DriftStatus = "stable" | "watch" | "shifted";
+
+export interface NumericDriftRow {
+  feature: string;
+  psi: number;
+  ks_statistic: number;
+  ks_pvalue: number;
+  status: DriftStatus;
+  reference_mean: number;
+  live_mean: number;
+  reference_std: number;
+  live_std: number;
+  recommendation: string;
+}
+
+export interface CategoryShare {
+  category: string;
+  reference_count: number;
+  reference_share: number;
+  live_count: number;
+  live_share: number;
+  delta: number;
+}
+
+export interface CategoricalDriftRow {
+  feature: string;
+  psi: number;
+  status: DriftStatus;
+  recommendation: string;
+  shares: CategoryShare[];
+}
+
+export interface DriftReport {
+  model_version: string | null;
+  reference_window: { from: string; to: string };
+  live_window: { from: string; to: string };
+  n_reference: number;
+  n_live: number;
+  overall_status: DriftStatus;
+  numeric_features: NumericDriftRow[];
+  categorical_features: CategoricalDriftRow[];
 }

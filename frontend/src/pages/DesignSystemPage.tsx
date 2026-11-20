@@ -6,6 +6,11 @@ import { PredictionTrail } from "@/components/domain/PredictionTrail";
 import { RiskCell } from "@/components/domain/RiskCell";
 import { RiskReading } from "@/components/domain/RiskReading";
 import { SignalList } from "@/components/domain/SignalList";
+import { SweepPanel } from "@/components/domain/SweepPanel";
+import { AblationPanel } from "@/components/domain/AblationPanel";
+import { RealDataPanel } from "@/components/domain/RealDataPanel";
+import { DriftPanel } from "@/components/domain/DriftPanel";
+import { ThresholdChooser } from "@/components/domain/ThresholdChooser";
 import { Badge, ModelStatusBadge, RunStatusBadge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState, ErrorState } from "@/components/ui/DataState";
@@ -16,6 +21,7 @@ import { Panel } from "@/components/ui/Panel";
 import { SkeletonRows } from "@/components/ui/Skeleton";
 import { Stat, StatRow } from "@/components/ui/Stat";
 import { Table, TD, TH } from "@/components/ui/Table";
+import { SAMPLE_ABLATION, SAMPLE_DRIFT_REPORT, SAMPLE_REALDATA_REPORT, SAMPLE_REPORT, SAMPLE_SWEEP } from "@/lib/mocks";
 import type { RunDetail } from "@/lib/types";
 
 /**
@@ -72,6 +78,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export function DesignSystemPage() {
   const [tab, setTab] = useState("all");
+  const [designThreshold, setDesignThreshold] = useState(0.3);
   return (
     <>
       <PageHeader title="Design system" description="Every component in every state, with the tokens behind them. Sample data only." />
@@ -162,14 +169,141 @@ export function DesignSystemPage() {
           ]} />
         </Section>
 
+        <Section title="Seed sweep panel">
+          <SweepPanel sweep={SAMPLE_SWEEP} onRunSweep={() => undefined} />
+          <div className="mt-6 border-t border-rule pt-4">
+            <h3 className="mb-2 text-sm text-muted">Empty state</h3>
+            <SweepPanel sweep={null} onRunSweep={() => undefined} />
+          </div>
+        </Section>
+
+        <Section title="Feature ablation panel">
+          <AblationPanel ablation={SAMPLE_ABLATION} onRunAblation={() => undefined} />
+          <div className="mt-6 border-t border-rule pt-4">
+            <h3 className="mb-2 text-sm text-muted">Empty state</h3>
+            <AblationPanel ablation={null} onRunAblation={() => undefined} />
+          </div>
+        </Section>
+
+        <Section title="Real data check panel">
+          <RealDataPanel report={SAMPLE_REALDATA_REPORT} />
+          <div className="mt-6 border-t border-rule pt-4">
+            <h3 className="mb-2 text-sm text-muted">Empty state</h3>
+            <RealDataPanel report={null} />
+          </div>
+        </Section>
+
+        <Section title="Data drift panel">
+          <DriftPanel report={SAMPLE_DRIFT_REPORT} />
+          <div className="mt-6 border-t border-rule pt-4">
+            <h3 className="mb-2 text-sm text-muted">Empty state</h3>
+            <DriftPanel report={null} />
+          </div>
+        </Section>
+
+        <Section title="Threshold chooser">
+          <ThresholdChooser
+            thresholds={SAMPLE_REPORT.thresholds}
+            precisionTarget={SAMPLE_REPORT.precision_target}
+            value={designThreshold}
+            onChange={setDesignThreshold}
+          />
+        </Section>
+
         <Section title="Table">
-          <Table caption="Sample table">
-            <thead><tr><TH>Run</TH><TH className="text-right">Lines</TH><TH>Status</TH></tr></thead>
+          <h3 className="mb-2 text-sm font-medium text-ink">Wide table (tabular semantics)</h3>
+          <p className="mb-3 text-sm text-muted">Used on desktop and tablet screens where column layout fits.</p>
+          <Table caption="Sample wide table">
+            <thead>
+              <tr>
+                <TH>Run</TH>
+                <TH>Repository</TH>
+                <TH className="text-right">Lines</TH>
+                <TH>Started</TH>
+                <TH>Risk</TH>
+                <TH>Status</TH>
+              </tr>
+            </thead>
             <tbody>
-              <tr><TD>#128 integration-tests</TD><TD className="num text-right font-outlier">412</TD><TD><RunStatusBadge status="failed" /></TD></tr>
-              <tr><TD>#129 build</TD><TD className="num text-right font-outlier">38</TD><TD><RunStatusBadge status="passed" /></TD></tr>
+              <tr>
+                <TD><span className="num font-outlier">#128</span> integration-tests</TD>
+                <TD className="text-ink-2">risky-deps</TD>
+                <TD className="num text-right font-outlier">412</TD>
+                <TD className="num font-outlier text-ink-2">6 Jan, 14:20</TD>
+                <TD><RiskCell risk={0.34} /></TD>
+                <TD><RunStatusBadge status="failed" /></TD>
+              </tr>
+              <tr>
+                <TD><span className="num font-outlier">#129</span> build</TD>
+                <TD className="text-ink-2">stable</TD>
+                <TD className="num text-right font-outlier">38</TD>
+                <TD className="num font-outlier text-ink-2">6 Jan, 14:45</TD>
+                <TD><RiskCell risk={0.08} /></TD>
+                <TD><RunStatusBadge status="passed" /></TD>
+              </tr>
             </tbody>
           </Table>
+
+          <h3 className="mt-6 mb-2 text-sm font-medium text-ink">Narrow screen restack (labelled blocks under 40rem)</h3>
+          <p className="mb-3 text-sm text-muted">Each row restacks into a labelled block on phones, keeping run links and risk readings visible without horizontal scrolling.</p>
+          <div className="max-w-md rounded-card border border-rule bg-paper-2 p-4">
+            <div className="divide-y divide-rule" role="feed" aria-label="Sample mobile restacked runs">
+              <article className="py-3.5 first:pt-0 last:pb-0">
+                <div className="flex items-start justify-between gap-3">
+                  <a href="#sample-128" className="font-medium text-ink hover:underline">
+                    <span className="num font-outlier">#128</span> integration-tests
+                  </a>
+                  <RunStatusBadge status="failed" />
+                </div>
+                <div className="mt-2.5 flex items-end justify-between gap-3">
+                  <dl className="m-0 space-y-0.5 text-xs text-muted">
+                    <div>
+                      <dt className="inline text-muted">Repository: </dt>
+                      <dd className="inline text-ink-2">risky-deps</dd>
+                    </div>
+                    <div>
+                      <dt className="inline text-muted">Changes: </dt>
+                      <dd className="num inline font-outlier text-ink-2">412 lines</dd>
+                    </div>
+                    <div>
+                      <dt className="inline text-muted">Started: </dt>
+                      <dd className="num inline font-outlier text-ink-2">6 Jan, 14:20</dd>
+                    </div>
+                  </dl>
+                  <div className="shrink-0 text-right">
+                    <RiskCell risk={0.34} />
+                  </div>
+                </div>
+              </article>
+              <article className="py-3.5 first:pt-0 last:pb-0">
+                <div className="flex items-start justify-between gap-3">
+                  <a href="#sample-129" className="font-medium text-ink hover:underline">
+                    <span className="num font-outlier">#129</span> build
+                  </a>
+                  <RunStatusBadge status="passed" />
+                </div>
+                <div className="mt-2.5 flex items-end justify-between gap-3">
+                  <dl className="m-0 space-y-0.5 text-xs text-muted">
+                    <div>
+                      <dt className="inline text-muted">Repository: </dt>
+                      <dd className="inline text-ink-2">stable</dd>
+                    </div>
+                    <div>
+                      <dt className="inline text-muted">Changes: </dt>
+                      <dd className="num inline font-outlier text-ink-2">38 lines</dd>
+                    </div>
+                    <div>
+                      <dt className="inline text-muted">Started: </dt>
+                      <dd className="num inline font-outlier text-ink-2">6 Jan, 14:45</dd>
+                    </div>
+                  </dl>
+                  <div className="shrink-0 text-right">
+                    <RiskCell risk={0.08} />
+                  </div>
+                </div>
+              </article>
+            </div>
+          </div>
         </Section>
 
         <Section title="The four data states">

@@ -3,6 +3,10 @@ import { useState } from "react";
 import { LineChart } from "@/components/charts/LineChart";
 import { GateChecks } from "@/components/domain/GateChecks";
 import { MetricsTable } from "@/components/domain/MetricsTable";
+import { SweepPanel } from "@/components/domain/SweepPanel";
+import { AblationPanel } from "@/components/domain/AblationPanel";
+import { RealDataPanel } from "@/components/domain/RealDataPanel";
+import { findTargetThreshold, ThresholdChooser } from "@/components/domain/ThresholdChooser";
 import { ModelStatusBadge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { DataState, EmptyState } from "@/components/ui/DataState";
@@ -11,8 +15,18 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { SkeletonRows } from "@/components/ui/Skeleton";
 import { Table, TD, TH } from "@/components/ui/Table";
-import { featureLabel, formatDateTime, formatDecimal, formatPercent } from "@/lib/format";
-import { useModels, usePromote, useReport, useTrain } from "@/lib/hooks";
+import { featureLabel, formatDateTime, formatDecimal } from "@/lib/format";
+import {
+  useAblationLatest,
+  useModels,
+  usePromote,
+  useRealDataLatest,
+  useReport,
+  useRunAblation,
+  useRunSweep,
+  useSweepLatest,
+  useTrain,
+} from "@/lib/hooks";
 import type { CandidateKind, Report } from "@/lib/types";
 import { useUrlState } from "@/lib/useUrlState";
 
@@ -42,13 +56,62 @@ function Importances({ values }: { values: Record<string, number> }) {
   );
 }
 
-function ReportView({ report }: { report: Report }) {
+function ReportView({
+  report,
+  thresholdParam,
+  onThresholdChange,
+}: {
+  report: Report;
+  thresholdParam: string;
+  onThresholdChange: (next: string) => void;
+}) {
   const m = report.model;
+  const cand = m.metrics.candidate;
+  const targetRow = findTargetThreshold(report.thresholds, report.precision_target);
+  const parsed = parseFloat(thresholdParam);
+  const currentThreshold = !isNaN(parsed) && parsed > 0 ? parsed : (targetRow?.threshold ?? 0.3);
+
   return (
     <div className="space-y-6">
       <Panel title={`Comparison for ${m.version}`} description={`Scores on the final, held-out period of ${m.n_test} runs. Training used ${m.n_train} earlier runs.`}>
         <MetricsTable metrics={m.metrics} precisionTarget={report.precision_target} />
       </Panel>
+      {report.generalisation && report.generalisation.length > 0 && (
+        <Panel
+          title="Generalisation: leave one scenario out"
+          description="Trained on three repositories and evaluated on the fourth, which the model never saw."
+        >
+          <Table caption="PR-AUC on each held-out scenario alongside the normal test">
+            <thead>
+              <tr>
+                <TH>Held-out scenario</TH>
+                <TH className="text-right">Majority PR-AUC</TH>
+                <TH className="text-right">Logistic regression PR-AUC</TH>
+                <TH className="text-right">Candidate PR-AUC</TH>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-rule-2">
+                <TD className="text-ink">Normal test (all scenarios)</TD>
+                <TD className="num text-right font-outlier">{formatDecimal(m.metrics.majority.pr_auc)}</TD>
+                <TD className="num text-right font-outlier">{formatDecimal(m.metrics.logreg.pr_auc)}</TD>
+                <TD className="num text-right font-outlier">{formatDecimal(m.metrics.candidate.pr_auc)}</TD>
+              </tr>
+              {report.generalisation.map((g) => (
+                <tr key={g.scenario}>
+                  <TD className="text-ink-2">Held out: {g.scenario}</TD>
+                  <TD className="num text-right font-outlier">{formatDecimal(g.majority_pr_auc)}</TD>
+                  <TD className="num text-right font-outlier">{formatDecimal(g.logreg_pr_auc)}</TD>
+                  <TD className="num text-right font-outlier">{formatDecimal(g.candidate_pr_auc)}</TD>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+          <p className="mt-3 text-sm text-muted">
+            This measures robustness to a different CI environment, not real-world accuracy.
+          </p>
+        </Panel>
+      )}
       <div className="grid gap-6 lg:grid-cols-2">
         <Panel title="Promotion gate" description={m.gate.passed ? "The candidate cleared every check." : "The candidate was rejected."}>
           <GateChecks checks={m.gate.checks} />
@@ -81,29 +144,39 @@ function ReportView({ report }: { report: Report }) {
               { name: "Candidate", tone: "cool", markers: true, points: report.reliability.candidate.map((p) => ({ x: p.mean_predicted, y: p.observed_rate })) },
             ]}
           />
+          {cand?.brier_uncalibrated !== undefined && (
+            <div className="mt-4 border-t border-rule pt-4">
+              <h4 className="mb-3 text-sm font-medium text-ink">Brier score before and after calibration</h4>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                <div>
+                  <div className="text-sm text-muted">Before calibration (raw)</div>
+                  <div className="num mt-1 font-outlier text-xl text-ink-2">{formatDecimal(cand.brier_uncalibrated, 4)}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted">After calibration (Platt)</div>
+                  <div className="num mt-1 font-outlier text-xl text-cool">{formatDecimal(cand.brier, 4)}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted">Difference</div>
+                  <div className="num mt-1 font-outlier text-xl text-ok">
+                    {formatDecimal(cand.brier - cand.brier_uncalibrated, 4)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </Panel>
       </div>
-      <Panel title="Choosing a threshold" description="Flagging more runs catches more failures and raises false alarms.">
-        <Table caption="Precision, recall and share of runs flagged at each threshold">
-          <thead>
-            <tr>
-              <TH>Flag runs at or above</TH>
-              <TH className="text-right">Precision</TH>
-              <TH className="text-right">Recall</TH>
-              <TH className="text-right">Runs flagged</TH>
-            </tr>
-          </thead>
-          <tbody>
-            {report.thresholds.map((t) => (
-              <tr key={t.threshold}>
-                <TD className="num font-outlier">{formatPercent(t.threshold)}</TD>
-                <TD className="num text-right font-outlier">{formatPercent(t.precision)}</TD>
-                <TD className="num text-right font-outlier">{formatPercent(t.recall)}</TD>
-                <TD className="num text-right font-outlier">{formatPercent(t.flagged_share)}</TD>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
+      <Panel
+        title="Choosing a threshold"
+        description="Flagging more runs catches more failures and raises false alarms. Adjust the cutoff to explore precision and recall trade-offs."
+      >
+        <ThresholdChooser
+          thresholds={report.thresholds}
+          precisionTarget={report.precision_target}
+          value={currentThreshold}
+          onChange={(val) => onThresholdChange(String(Math.round(val * 100) / 100))}
+        />
       </Panel>
       <Panel title="Time-ordered split" description="Training always comes before validation, which comes before the test period.">
         <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
@@ -124,11 +197,17 @@ function ReportView({ report }: { report: Report }) {
 export function ModelsPage() {
   const models = useModels();
   const [selected, setSelected] = useUrlState("model", "");
+  const [thresholdParam, setThresholdParam] = useUrlState("threshold", "");
   const report = useReport(selected ? Number(selected) : undefined);
   const train = useTrain();
   const promote = usePromote();
+  const sweep = useSweepLatest();
+  const runSweep = useRunSweep();
+  const ablation = useAblationLatest();
+  const runAblation = useRunAblation();
+  const realdata = useRealDataLatest();
   const [candidate, setCandidate] = useState<CandidateKind>("hist_gb");
-  const error = train.error ?? promote.error;
+  const error = train.error ?? promote.error ?? runSweep.error ?? runAblation.error;
 
   return (
     <>
@@ -150,8 +229,8 @@ export function ModelsPage() {
           </>
         }
       />
-      {error && <p role="alert" className="mb-4 text-bad">{error.message}</p>}
-      <div className="space-y-6">
+      {error && <p role="alert" aria-live="assertive" className="mb-4 text-bad">{error.message}</p>}
+      <div className="space-y-6 min-w-0 max-w-full">
         <Panel title="Registry">
           <DataState
             query={models}
@@ -166,9 +245,9 @@ export function ModelsPage() {
                     <TH>Version</TH>
                     <TH>Status</TH>
                     <TH className="text-right">PR-AUC</TH>
-                    <TH className="text-right">Brier score</TH>
-                    <TH>Trained</TH>
-                    <TH>
+                    <TH className="text-right"><span className="sm:hidden">Brier</span><span className="hidden sm:inline">Brier score</span></TH>
+                    <TH className="hidden sm:table-cell">Trained</TH>
+                    <TH className="pr-0 sm:pr-4">
                       <span className="visually-hidden">Actions</span>
                     </TH>
                   </tr>
@@ -177,7 +256,12 @@ export function ModelsPage() {
                   {list.map((m) => (
                     <tr key={m.id}>
                       <TD>
-                        <button type="button" onClick={() => setSelected(String(m.id))} className="num font-outlier text-ink underline underline-offset-4">
+                        <button
+                          type="button"
+                          onClick={() => setSelected(String(m.id))}
+                          aria-label={`Select model ${m.version}`}
+                          className="num font-outlier text-ink underline underline-offset-4"
+                        >
                           {m.version}
                         </button>
                       </TD>
@@ -186,10 +270,14 @@ export function ModelsPage() {
                       </TD>
                       <TD className="num text-right font-outlier">{formatDecimal(m.metrics.candidate.pr_auc)}</TD>
                       <TD className="num text-right font-outlier">{formatDecimal(m.metrics.candidate.brier, 4)}</TD>
-                      <TD className="num font-outlier text-ink-2">{formatDateTime(m.created_at)}</TD>
-                      <TD className="text-right">
+                      <TD className="hidden num font-outlier text-ink-2 sm:table-cell">{formatDateTime(m.created_at)}</TD>
+                      <TD className="text-right pr-0 sm:pr-4">
                         {m.status === "candidate" && (
-                          <Button variant="primary" busy={promote.isPending} onClick={() => promote.mutate(m.id)}>
+                          <Button
+                            variant="primary"
+                            busy={promote.isPending}
+                            onClick={() => promote.mutate(m.id)}
+                          >
                             Promote
                           </Button>
                         )}
@@ -201,9 +289,26 @@ export function ModelsPage() {
             )}
           </DataState>
         </Panel>
+        <SweepPanel
+          query={sweep}
+          onRunSweep={() => runSweep.mutate({ candidate })}
+          isBusy={runSweep.isPending}
+        />
+        <AblationPanel
+          query={ablation}
+          onRunAblation={() => runAblation.mutate({ candidate })}
+          isBusy={runAblation.isPending}
+        />
+        <RealDataPanel query={realdata} />
         {models.data && models.data.length > 0 && (
           <DataState query={report} skeleton={<SkeletonRows rows={6} label="Loading report" />}>
-            {(r) => <ReportView report={r} />}
+            {(r) => (
+              <ReportView
+                report={r}
+                thresholdParam={thresholdParam}
+                onThresholdChange={setThresholdParam}
+              />
+            )}
           </DataState>
         )}
       </div>

@@ -10,6 +10,7 @@ export function useUrlState(key: string, defaultValue = ""): [string, (next: str
   const value = params.get(key) ?? defaultValue;
   const set = useCallback(
     (next: string) => {
+      if (next === value) return;
       setParams(
         (prev) => {
           const copy = new URLSearchParams(prev);
@@ -20,7 +21,7 @@ export function useUrlState(key: string, defaultValue = ""): [string, (next: str
         { replace: true },
       );
     },
-    [key, defaultValue, setParams],
+    [key, defaultValue, setParams, value],
   );
   return [value, set];
 }
