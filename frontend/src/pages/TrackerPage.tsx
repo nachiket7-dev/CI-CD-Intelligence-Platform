@@ -92,7 +92,11 @@ export function TrackerPage() {
                 <tbody>
                   {t.recent.map((r) => (
                     <tr key={r.run_id}>
-                      <TD><Link to={`/runs/${r.run_id}`} className="num font-outlier">#{r.run_id}</Link></TD>
+                      <TD>
+                        <Link to={`/runs/${r.run_id}`} aria-label={`View run #${r.run_id}`} className="num font-outlier hover:underline">
+                          #{r.run_id}
+                        </Link>
+                      </TD>
                       <TD className="num text-right font-outlier">{formatPercent(r.probability)}</TD>
                       <TD><RunStatusBadge status={r.failed ? "failed" : "passed"} /></TD>
                       <TD className="num font-outlier text-ink-2">{formatDateTime(r.predicted_at)}</TD>

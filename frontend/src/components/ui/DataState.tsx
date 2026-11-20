@@ -16,7 +16,7 @@ export function EmptyState({ title, body, action }: { title: string; body: strin
 
 export function ErrorState({ error, onRetry }: { error: Error; onRetry?: () => void }) {
   return (
-    <div role="alert" className="flex flex-col items-start gap-3 py-8">
+    <div role="alert" aria-live="assertive" className="flex flex-col items-start gap-3 py-8">
       <h3 className="text-bad">This didn’t load</h3>
       <p className="max-w-[60ch] text-ink-2">{error.message}</p>
       {onRetry && (

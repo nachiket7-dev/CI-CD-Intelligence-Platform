@@ -13,7 +13,7 @@ interface Props {
 /** The one container recipe: a hairline-bordered surface one step above the ground. Never nest panels. */
 export function Panel({ title, description, action, children, className }: Props) {
   return (
-    <section className={cn("rounded-card border border-rule bg-paper-2", className)}>
+    <section className={cn("min-w-0 max-w-full rounded-card border border-rule bg-paper-2", className)}>
       {(title || action) && (
         <header className="flex flex-wrap items-start justify-between gap-3 border-b border-rule px-4 py-3">
           <div className="min-w-0">
@@ -23,7 +23,7 @@ export function Panel({ title, description, action, children, className }: Props
           {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
         </header>
       )}
-      <div className="p-4">{children}</div>
+      <div className="min-w-0 max-w-full p-4">{children}</div>
     </section>
   );
 }

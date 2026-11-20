@@ -3,10 +3,18 @@ import type { ReactNode, TdHTMLAttributes, ThHTMLAttributes } from "react";
 import { cn } from "@/lib/cn";
 
 /** Tables, not cards: horizontal rules only, sentence-case heads, scrolls sideways on small screens. */
-export function Table({ children, caption }: { children: ReactNode; caption: string }) {
+export function Table({
+  children,
+  caption,
+  className,
+}: {
+  children: ReactNode;
+  caption: string;
+  className?: string;
+}) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[40rem] border-collapse text-left text-sm">
+    <div className="w-full max-w-full overflow-x-auto">
+      <table className={cn("w-full border-collapse text-left text-sm", className)}>
         <caption className="visually-hidden">{caption}</caption>
         {children}
       </table>

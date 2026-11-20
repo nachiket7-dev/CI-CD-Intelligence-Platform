@@ -47,18 +47,26 @@ export function RunDetailPage() {
                 r.status === "pending" && (
                   <>
                     {!r.prediction && (
-                      <Button variant="primary" busy={score.isPending} onClick={() => score.mutate(r.id)} disabled={!health.data?.active_model}>
+                      <Button
+                        variant="primary"
+                        busy={score.isPending}
+                        onClick={() => score.mutate(r.id)}
+                        disabled={!health.data?.active_model}
+                      >
                         Score this run
                       </Button>
                     )}
-                    <Button busy={finish.isPending} onClick={() => finish.mutate(r.id)}>
+                    <Button
+                      busy={finish.isPending}
+                      onClick={() => finish.mutate(r.id)}
+                    >
                       Finish run
                     </Button>
                   </>
                 )
               }
             />
-            {error && <p role="alert" className="mb-4 text-bad">{error.message}</p>}
+            {error && <p role="alert" aria-live="assertive" className="mb-4 text-bad">{error.message}</p>}
             {r.status === "pending" && !r.prediction && health.data && !health.data.active_model && (
               <p className="mb-4 text-ink-2">
                 There is no active model to score with. <Link to="/models">Train and promote one</Link> first.

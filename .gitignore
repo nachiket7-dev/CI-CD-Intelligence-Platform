@@ -5,3 +5,10 @@ dist/
 .env
 *.log
 .DS_Store
+data/
+*.csv
+*.csv.zip
+final_research_dataset_MASTER.csv
+test-results/
+playwright-report/
+.vscode/

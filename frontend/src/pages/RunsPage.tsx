@@ -35,7 +35,7 @@ export function RunsPage() {
 
   const change = (setter: (v: string) => void) => (v: string) => {
     setter(v);
-    setPage("0");
+    if (page !== "0") setPage("0");
   };
 
   return (
@@ -55,7 +55,7 @@ export function RunsPage() {
         }
       />
       {(simulate.isError || live.isError) && (
-        <p role="alert" className="mb-4 text-bad">
+        <p role="alert" aria-live="assertive" className="mb-4 text-bad">
           {(simulate.error ?? live.error)?.message}
         </p>
       )}
@@ -108,45 +108,81 @@ export function RunsPage() {
             const total = status === "all" ? data.counts.total : data.counts[status as RunStatus];
             return (
               <>
-                <Table caption="CI runs with failure risk and outcome">
-                  <thead>
-                    <tr>
-                      <TH>Run</TH>
-                      <TH>Repository</TH>
-                      <TH className="text-right">Lines changed</TH>
-                      <TH>Started</TH>
-                      <TH>Risk</TH>
-                      <TH>Status</TH>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.items.map((r) => (
-                      <tr key={r.id}>
-                        <TD>
-                          <Link to={`/runs/${r.id}`} className="text-ink">
-                            <span className="num font-outlier">#{r.id}</span> {r.workflow_name}
-                          </Link>
-                        </TD>
-                        <TD className="text-ink-2">{r.repo}</TD>
-                        <TD className="num text-right font-outlier">{r.lines_changed}</TD>
-                        <TD className="num font-outlier text-ink-2">{formatDateTime(r.started_at)}</TD>
-                        <TD>
+                {/* Narrow screens: restack each row into a labelled block (< 640px) */}
+                <div className="divide-y divide-rule sm:hidden" role="feed" aria-label="CI runs list">
+                  {data.items.map((r) => (
+                    <article key={r.id} className="py-3.5 first:pt-0 last:pb-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <Link to={`/runs/${r.id}`} className="font-medium text-ink hover:underline">
+                          <span className="num font-outlier">#{r.id}</span> {r.workflow_name}
+                        </Link>
+                        <RunStatusBadge status={r.status} />
+                      </div>
+                      <div className="mt-2.5 flex items-end justify-between gap-3">
+                        <dl className="m-0 space-y-0.5 text-xs text-muted">
+                          <div>
+                            <dt className="inline text-muted">Repository: </dt>
+                            <dd className="inline text-ink-2">{r.repo}</dd>
+                          </div>
+                          <div>
+                            <dt className="inline text-muted">Changes: </dt>
+                            <dd className="num inline font-outlier text-ink-2">{r.lines_changed} lines</dd>
+                          </div>
+                          <div>
+                            <dt className="inline text-muted">Started: </dt>
+                            <dd className="num inline font-outlier text-ink-2">{formatDateTime(r.started_at)}</dd>
+                          </div>
+                        </dl>
+                        <div className="shrink-0 text-right">
                           <RiskCell risk={r.risk} />
-                        </TD>
-                        <TD>
-                          <RunStatusBadge status={r.status} />
-                        </TD>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                {/* Wide screens: real semantic <table> (>= 640px) */}
+                <div className="hidden sm:block">
+                  <Table caption="CI runs with failure risk and outcome">
+                    <thead>
+                      <tr>
+                        <TH>Run</TH>
+                        <TH>Repository</TH>
+                        <TH className="text-right">Lines changed</TH>
+                        <TH>Started</TH>
+                        <TH>Risk</TH>
+                        <TH>Status</TH>
                       </tr>
-                    ))}
-                  </tbody>
-                </Table>
+                    </thead>
+                    <tbody>
+                      {data.items.map((r) => (
+                        <tr key={r.id}>
+                          <TD>
+                            <Link to={`/runs/${r.id}`} className="text-ink hover:underline">
+                              <span className="num font-outlier">#{r.id}</span> {r.workflow_name}
+                            </Link>
+                          </TD>
+                          <TD className="text-ink-2">{r.repo}</TD>
+                          <TD className="num text-right font-outlier">{r.lines_changed}</TD>
+                          <TD className="num font-outlier text-ink-2">{formatDateTime(r.started_at)}</TD>
+                          <TD>
+                            <RiskCell risk={r.risk} />
+                          </TD>
+                          <TD>
+                            <RunStatusBadge status={r.status} />
+                          </TD>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </div>
                 <div className="mt-4 flex items-center justify-between gap-3 text-sm text-muted">
-                  <span className="num">
+                  <span className="num" aria-live="polite">
                     Showing {offset + 1} to {Math.min(offset + PAGE_SIZE, total)} of {total}
                   </span>
                   <span className="flex gap-2">
-                    <Button disabled={offset === 0} onClick={() => setPage(String(Number(page) - 1))}>Previous</Button>
-                    <Button disabled={offset + PAGE_SIZE >= total} onClick={() => setPage(String(Number(page) + 1))}>Next</Button>
+                    <Button disabled={offset === 0} onClick={() => setPage(String(Number(page) - 1))} aria-label="Previous page">Previous</Button>
+                    <Button disabled={offset + PAGE_SIZE >= total} onClick={() => setPage(String(Number(page) + 1))} aria-label="Next page">Next</Button>
                   </span>
                 </div>
               </>
