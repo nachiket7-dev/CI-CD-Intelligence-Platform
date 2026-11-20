@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from typing import Any
 
 
 class ContractViolation(ValueError):
@@ -104,6 +105,47 @@ def check_columns(columns: Iterable[str]) -> list[str]:
         elif col not in allowed:
             problems.append(f"'{col}' is not listed in the feature contract")
     return problems
+
+
+def enforce_contract(columns: Iterable[str]) -> None:
+    """Validate that columns satisfy the feature contract; raise ContractViolation if not."""
+    violations = check_columns(columns)
+    if violations:
+        raise ContractViolation("; ".join(violations))
+
+
+FEATURE_GROUPS: dict[str, dict[str, Any]] = {
+    "rolling_history": {
+        "name": "Rolling history features",
+        "features": [
+            "workflow_fail_rate_recent",
+            "hours_since_last_failure",
+            "author_recent_fail_rate",
+        ],
+    },
+    "queue_and_timing": {
+        "name": "Queue and timing",
+        "features": [
+            "queue_depth_at_start",
+            "hour_of_day",
+            "day_of_week",
+        ],
+    },
+    "change_size": {
+        "name": "Change size",
+        "features": [
+            "files_changed",
+            "lines_changed",
+        ],
+    },
+    "dependency_and_ci_flags": {
+        "name": "Dependency and CI-config flags",
+        "features": [
+            "touches_dependencies",
+            "touches_ci_config",
+        ],
+    },
+}
 
 
 def validate_payload(payload: Mapping[str, object]) -> None:

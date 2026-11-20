@@ -26,22 +26,32 @@ CANDIDATE_KINDS = ("hist_gb", "random_forest", "weak_stump")
 MIN_RUNS = 300
 
 
-def _preprocessor(scale: bool) -> ColumnTransformer:
-    return ColumnTransformer(
-        [
-            ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False), CATEGORICAL_FEATURES),
-            ("num", StandardScaler() if scale else "passthrough", NUMERIC_FEATURES),
-        ],
-        verbose_feature_names_out=False,
-    )
+def _preprocessor(
+    scale: bool,
+    categorical_cols: list[str] = CATEGORICAL_FEATURES,
+    numeric_cols: list[str] = NUMERIC_FEATURES,
+) -> ColumnTransformer:
+    transformers = []
+    if categorical_cols:
+        transformers.append(
+            ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False), categorical_cols)
+        )
+    if numeric_cols:
+        transformers.append(("num", StandardScaler() if scale else "passthrough", numeric_cols))
+    return ColumnTransformer(transformers, verbose_feature_names_out=False)
 
 
-def build_estimator(kind: str, seed: int):
+def build_estimator(
+    kind: str,
+    seed: int,
+    categorical_cols: list[str] = CATEGORICAL_FEATURES,
+    numeric_cols: list[str] = NUMERIC_FEATURES,
+):
     if kind == "majority":
         return DummyClassifier(strategy="prior")
     if kind == "logreg":
         clf = LogisticRegression(max_iter=2000, C=1.0)
-        return Pipeline([("prep", _preprocessor(True)), ("clf", clf)])
+        return Pipeline([("prep", _preprocessor(True, categorical_cols, numeric_cols)), ("clf", clf)])
     if kind == "hist_gb":
         clf = HistGradientBoostingClassifier(
             learning_rate=0.06,
@@ -57,7 +67,7 @@ def build_estimator(kind: str, seed: int):
         clf = DecisionTreeClassifier(max_depth=1, random_state=seed)
     else:
         raise ValueError(f"Unknown model kind '{kind}'. Choose one of {CANDIDATE_KINDS}.")
-    return Pipeline([("prep", _preprocessor(False)), ("clf", clf)])
+    return Pipeline([("prep", _preprocessor(False, categorical_cols, numeric_cols)), ("clf", clf)])
 
 
 def _logit(p: np.ndarray) -> np.ndarray:
@@ -95,6 +105,7 @@ class Experiment:
     leakage_violations: list[str]
     gate: GateDecision
     model: CalibratedModel
+    holdout_repo: str | None = None
 
 
 def _window(frame: pd.DataFrame, idx: pd.Index) -> dict[str, str]:
@@ -107,6 +118,9 @@ def run_experiment(
     *,
     seed: int,
     candidate_kind: str = "hist_gb",
+    holdout_repo: str | None = None,
+    drop_features: list[str] | None = None,
+    leak_column: str | None = None,
     precision_target: float = 0.5,
     gate_margin: float = 0.02,
     brier_tolerance: float = 0.002,
@@ -119,15 +133,48 @@ def run_experiment(
     if runs["failed"].nunique() < 2:
         raise ValueError("Every finished run has the same outcome, so there is nothing to learn.")
 
+    if holdout_repo is not None:
+        if holdout_repo not in runs["repo"].values:
+            raise ValueError(f"Holdout repo '{holdout_repo}' not found in runs.")
+        main_runs = runs[runs["repo"] != holdout_repo].sort_values("started_at", kind="mergesort")
+        test_runs = runs[runs["repo"] == holdout_repo].sort_values("started_at", kind="mergesort")
+        if len(main_runs) < MIN_RUNS:
+            raise ValueError(
+                f"Need at least {MIN_RUNS} finished runs to train; "
+                f"found {len(main_runs)} after holding out '{holdout_repo}'."
+            )
+        if main_runs["failed"].nunique() < 2:
+            raise ValueError(
+                "Every finished training run has the same outcome, so there is nothing to learn."
+            )
+        if test_runs.empty:
+            raise ValueError(f"Holdout repo '{holdout_repo}' has no test runs.")
+        n_main = len(main_runs)
+        n_tr = int(n_main * 0.75)
+        tr = main_runs.index[:n_tr]
+        va = main_runs.index[n_tr:]
+        te = test_runs.index
+    else:
+        tr, va, te = time_split(runs)
+
     X = build_features(runs, runs, window=rolling_window)
+    if drop_features:
+        X = X.drop(columns=[c for c in drop_features if c in X.columns])
+    if leak_column:
+        X[leak_column] = runs[leak_column].to_numpy()
+
+    cat_cols = [c for c in CATEGORICAL_FEATURES if c in X.columns]
+    num_cols = [c for c in NUMERIC_FEATURES if c in X.columns]
+    if leak_column and leak_column not in cat_cols and leak_column not in num_cols:
+        num_cols.append(leak_column)
+
     y = runs["failed"].astype(int).to_numpy()
-    tr, va, te = time_split(runs)
     X_tr, X_va, X_te = X.loc[tr], X.loc[va], X.loc[te]
     y_tr, y_va, y_te = y[tr.to_numpy()], y[va.to_numpy()], y[te.to_numpy()]
 
     fitted = {}
     for name, kind in (("majority", "majority"), ("logreg", "logreg"), ("candidate", candidate_kind)):
-        est = build_estimator(kind, seed)
+        est = build_estimator(kind, seed, categorical_cols=cat_cols, numeric_cols=num_cols)
         est.fit(X_tr, y_tr)
         fitted[name] = est
 
@@ -153,8 +200,8 @@ def run_experiment(
             zip(X_va.columns, importance.importances_mean, strict=True), key=lambda kv: -kv[1]
         )
     }
-    reference: dict[str, Any] = {c: X_tr[c].median() for c in NUMERIC_FEATURES}
-    reference.update({c: X_tr[c].mode().iloc[0] for c in CATEGORICAL_FEATURES})
+    reference: dict[str, Any] = {c: X_tr[c].median() for c in num_cols if c in X_tr.columns}
+    reference.update({c: X_tr[c].mode().iloc[0] for c in cat_cols if c in X_tr.columns})
 
     violations = check_columns(X.columns)
     gate = evaluate_gate(metrics, violations, margin=gate_margin, brier_tolerance=brier_tolerance)
@@ -177,6 +224,7 @@ def run_experiment(
         leakage_violations=violations,
         gate=gate,
         model=candidate,
+        holdout_repo=holdout_repo,
     )
 
 

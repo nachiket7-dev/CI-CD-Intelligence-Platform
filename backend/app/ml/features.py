@@ -84,15 +84,16 @@ def build_features(
     prior_rate: float | None = None,
 ) -> pd.DataFrame:
     """Return one row of contract features per target row, in the same order."""
-    t = targets[PRE_RUN_COLUMNS].copy()  # never touches outcome or duration columns of a target
+    present_pre = [c for c in PRE_RUN_COLUMNS if c in targets.columns]
+    t = targets[present_pre].copy()  # never touches outcome or duration columns of a target
     hist = history[["repo", "workflow_name", "author", "finished_at", "failed"]]
     prior = DEFAULT_PRIOR if prior_rate is None else prior_rate
 
-    feats = t.drop(columns=["author", "started_at"]).copy()
+    feats = t.drop(columns=[c for c in ["author", "started_at"] if c in t.columns]).copy()
     feats["workflow_fail_rate_recent"] = _rolling_rate(t, hist, ["repo", "workflow_name"], window, prior)
     feats["hours_since_last_failure"] = _hours_since_last_failure(t, hist)
     feats["author_recent_fail_rate"] = _rolling_rate(t, hist, ["repo", "author"], window, prior)
     started = pd.to_datetime(t["started_at"])
     feats["hour_of_day"] = started.dt.hour
     feats["day_of_week"] = started.dt.dayofweek
-    return feats[FEATURE_COLUMNS]
+    return feats[[c for c in FEATURE_COLUMNS if c in feats.columns]]

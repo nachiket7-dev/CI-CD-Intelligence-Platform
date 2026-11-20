@@ -1,3 +1,5 @@
+import type { MetricSpread } from "./types";
+
 /** Formatting helpers. Numbers shown to people are always tabular (see `.num` in base.css). */
 
 /** The API sends naive UTC datetimes. Treat them as UTC so every viewer sees the same time. */
@@ -25,6 +27,11 @@ export function formatPercent(p: number | null | undefined, digits = 0): string 
 export function formatDecimal(n: number | null | undefined, digits = 3): string {
   if (n === null || n === undefined) return "n/a";
   return n.toFixed(digits);
+}
+
+export function formatSpread(metric: MetricSpread | null | undefined, digits = 3): string {
+  if (!metric || metric.mean === null || metric.mean === undefined) return "not reached";
+  return `${formatDecimal(metric.mean, digits)} ± ${formatDecimal(metric.spread, digits)}`;
 }
 
 export function formatDuration(seconds: number): string {
