@@ -8,6 +8,7 @@ const NAV = [
   { to: "/", label: "Runs", end: true },
   { to: "/models", label: "Models" },
   { to: "/tracker", label: "Tracker" },
+  { to: "/drift", label: "Drift" },
 ];
 
 /** A new shell is a top bar. A sidebar is earned by more than about seven destinations. */
@@ -16,9 +17,15 @@ export function AppShell() {
   const nav = import.meta.env.DEV ? [...NAV, { to: "/design", label: "Design system" }] : NAV;
   return (
     <>
-      <header className="sticky top-0 z-(--z-sticky-nav) border-b border-rule bg-paper">
-        <div className="container flex h-14 items-center gap-6">
-          <NavLink to="/" aria-label="CI/CD Intelligence, home" className="font-display text-title font-medium text-ink no-underline">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-pill focus:bg-accent focus:px-4 focus:py-2 focus:text-accent-ink focus:shadow-none focus:outline-none"
+      >
+        Skip to main content
+      </a>
+      <header className="sticky top-0 z-(--z-sticky-nav) max-w-full overflow-hidden border-b border-rule bg-paper">
+        <div className="container flex h-14 items-center gap-3 sm:gap-6">
+          <NavLink to="/" aria-label="CI/CD Intelligence, home" className="shrink-0 font-display text-title font-medium text-ink no-underline">
             CI/CD Intelligence
           </NavLink>
           <nav aria-label="Main" className="-mx-2 flex min-w-0 flex-1 gap-1 overflow-x-auto">
@@ -44,7 +51,7 @@ export function AppShell() {
         </div>
       </header>
       <SyntheticBanner />
-      <main className="container py-8">
+      <main id="main-content" tabIndex={-1} className="container min-w-0 max-w-full py-8 focus:outline-none">
         <Outlet />
       </main>
     </>

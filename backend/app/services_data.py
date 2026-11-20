@@ -119,7 +119,15 @@ def simulate_into_db(
     return counts(db)
 
 
-def add_live_runs(db: Session, settings: Settings, count: int, seed: int | None) -> list[Run]:
+def add_live_runs(
+    db: Session,
+    settings: Settings,
+    count: int,
+    seed: int | None,
+    *,
+    drift: bool = False,
+    drift_queue_boost: float = 0.0,
+) -> list[Run]:
     """Append pending runs after the latest run, as if new commits just arrived."""
     last = db.scalar(select(func.max(Run.started_at)))
     if last is None:
@@ -127,7 +135,13 @@ def add_live_runs(db: Session, settings: Settings, count: int, seed: int | None)
     total = db.scalar(select(func.count()).select_from(Run)) or 0
     scenarios = pick_scenarios(settings, None)
     frame = simulate(
-        scenarios, count, seed if seed is not None else 1000 + total, start_after=last, stream=total
+        scenarios,
+        count,
+        seed if seed is not None else 1000 + total,
+        start_after=last,
+        stream=total,
+        drift=drift,
+        drift_queue_boost=drift_queue_boost,
     ).head(count)
     runs = _store(db, frame, pending=count)
     db.commit()

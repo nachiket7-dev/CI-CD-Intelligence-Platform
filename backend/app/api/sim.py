@@ -32,7 +32,14 @@ def simulate(body: SimulateRequest, db: DB, settings: SettingsDep) -> RunCounts:
 @router.post("/simulate/live", response_model=list[RunOut])
 def live_runs(body: LiveRunsRequest, db: DB, settings: SettingsDep) -> list[RunOut]:
     """Add new pending runs. If a model is active, each one is scored before it can finish."""
-    runs = add_live_runs(db, settings, body.count, body.seed)
+    runs = add_live_runs(
+        db,
+        settings,
+        body.count,
+        body.seed,
+        drift=body.drift,
+        drift_queue_boost=body.drift_queue_boost,
+    )
     if active_model(db) is not None:
         for run in runs:
             predict_for_run(db, settings, run)

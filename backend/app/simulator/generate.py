@@ -43,6 +43,8 @@ def simulate_scenario(
     *,
     start_after: datetime | None = None,
     stream: int = 0,
+    drift: bool = False,
+    drift_queue_boost: float = 0.0,
 ) -> pd.DataFrame:
     """Simulate one repository. ``stream`` lets callers continue a timeline with fresh randomness."""
     rng = _scenario_rng(seed, scenario.name, stream)
@@ -65,7 +67,8 @@ def simulate_scenario(
     lines = np.maximum(1, (files * rng.lognormal(3.0, 0.8, n_runs)).astype(int))
     deps = (rng.random(n_runs) < scenario.p_dependencies).astype(int)
     ci_cfg = (rng.random(n_runs) < scenario.p_ci_config).astype(int)
-    queue = rng.poisson(scenario.base_queue * (1 + 1.5 * peak))
+    queue_boost = drift_queue_boost if drift_queue_boost > 0 else (15.0 if drift else 0.0)
+    queue = rng.poisson(scenario.base_queue * (1 + 1.5 * peak) + queue_boost)
 
     author_effect = rng.normal(0.0, eff["author_spread"], scenario.authors)
     noise = rng.normal(0.0, scenario.noise, n_runs)
@@ -135,10 +138,20 @@ def simulate(
     *,
     start_after: datetime | None = None,
     stream: int = 0,
+    drift: bool = False,
+    drift_queue_boost: float = 0.0,
 ) -> pd.DataFrame:
     """Simulate several repositories and merge them into one time-ordered dataset."""
     frames = [
-        simulate_scenario(s, n_runs, seed, start_after=start_after, stream=stream)
+        simulate_scenario(
+            s,
+            n_runs,
+            seed,
+            start_after=start_after,
+            stream=stream,
+            drift=drift,
+            drift_queue_boost=drift_queue_boost,
+        )
         for s in sorted(scenarios, key=lambda s: s.name)
     ]
     merged = pd.concat(frames, ignore_index=True)

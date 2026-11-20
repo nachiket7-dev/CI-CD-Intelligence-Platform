@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .api import models, runs, sim
+from .api import drift, models, runs, sim
 from .config import Settings
 from .contract import ContractViolation
 from .db import Database
@@ -56,7 +56,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 scenarios=list(scenario_catalog(settings)),
             )
 
-    for router in (runs.router, sim.router, models.router):
+    for router in (runs.router, sim.router, models.router, drift.router):
         app.include_router(router, prefix="/api")
     return app
 
