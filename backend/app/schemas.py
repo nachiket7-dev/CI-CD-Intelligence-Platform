@@ -19,13 +19,21 @@ class SimulateRequest(BaseModel):
 
 
 class LiveRunsRequest(BaseModel):
-    count: int = Field(5, ge=1, le=30)
+    count: int = Field(5, ge=1, le=200)
     seed: int | None = None
+    drift: bool = False
+    drift_queue_boost: float = 0.0
 
 
 class TrainRequest(BaseModel):
     candidate: CandidateKind = "hist_gb"
     seed: int = 42
+
+
+class SweepRequest(BaseModel):
+    seeds: int = Field(5, ge=1, le=20)
+    runs_per_scenario: int = Field(1000, ge=100, le=4000)
+    candidate: CandidateKind = "hist_gb"
 
 
 class OutcomeRequest(BaseModel):
@@ -117,6 +125,13 @@ class ModelOut(BaseModel):
     importances: dict[str, float]
 
 
+class GeneralisationRow(BaseModel):
+    scenario: str
+    majority_pr_auc: float
+    logreg_pr_auc: float
+    candidate_pr_auc: float
+
+
 class ReportOut(BaseModel):
     model: ModelOut
     precision_target: float
@@ -124,6 +139,95 @@ class ReportOut(BaseModel):
     thresholds: list[dict[str, float]]
     pr_curves: dict[str, list[dict[str, float]]]
     reliability: dict[str, list[dict[str, float]]]
+    generalisation: list[GeneralisationRow] | None = None
+
+
+class MetricSpread(BaseModel):
+    mean: float | None = None
+    spread: float | None = None
+
+
+class ModelSweepMetrics(BaseModel):
+    pr_auc: MetricSpread
+    brier: MetricSpread
+    recall: MetricSpread
+    recall_at_precision: MetricSpread | None = None
+
+
+class LeaveOneOutRow(BaseModel):
+    scenario: str
+    majority_pr_auc: MetricSpread
+    logreg_pr_auc: MetricSpread
+    candidate_pr_auc: MetricSpread
+
+
+class SweepOut(BaseModel):
+    id: int
+    created_at: datetime
+    seeds: int
+    runs_per_scenario: int
+    candidate: str
+    precision_target: float
+    gate_pass_rate: float
+    passed_seeds: int
+    metrics: dict[str, ModelSweepMetrics]
+    leave_one_out: list[LeaveOneOutRow] = Field(default_factory=list)
+
+
+class AblationRow(BaseModel):
+    group_id: str
+    name: str
+    features: list[str]
+    pr_auc: MetricSpread
+    delta_pr_auc: MetricSpread
+
+
+class DeliberateLeakReport(BaseModel):
+    forbidden_field: str
+    contract_caught: bool
+    contract_error: str
+    gate_caught: bool
+    gate_passed: bool
+    gate_violations: list[str]
+
+
+class AblationIn(BaseModel):
+    seeds: int = Field(5, ge=1, le=20)
+    runs_per_scenario: int = Field(1000, ge=100, le=5000)
+    candidate: str = "hist_gb"
+
+
+class AblationOut(BaseModel):
+    id: int
+    created_at: datetime
+    seeds: int
+    runs_per_scenario: int
+    candidate: str
+    full_model_pr_auc: MetricSpread
+    groups: list[AblationRow]
+    deliberate_leak: DeliberateLeakReport
+
+
+class RealDataMissingFeature(BaseModel):
+    feature: str
+    reason: str
+
+
+class RealDataReportOut(BaseModel):
+    id: int
+    created_at: datetime
+    dataset_name: str
+    doi: str
+    licence: str
+    total_rows: int
+    candidate: str
+    metrics: dict[str, Any]
+    gate: dict[str, Any]
+    thresholds: list[dict[str, Any]]
+    importances: dict[str, float]
+    available_features: list[str]
+    missing_contract_features: list[RealDataMissingFeature]
+    dropped_columns: list[str]
 
 
 class TrackerOut(BaseModel):
@@ -140,3 +244,44 @@ class HealthOut(BaseModel):
     active_model: str | None
     runs: RunCounts
     scenarios: list[str]
+
+
+class NumericDriftRow(BaseModel):
+    feature: str
+    psi: float
+    ks_statistic: float
+    ks_pvalue: float
+    status: str  # "stable" | "watch" | "shifted"
+    reference_mean: float
+    live_mean: float
+    reference_std: float
+    live_std: float
+    recommendation: str
+
+
+class CategoryShare(BaseModel):
+    category: str
+    reference_count: int
+    reference_share: float
+    live_count: int
+    live_share: float
+    delta: float
+
+
+class CategoricalDriftRow(BaseModel):
+    feature: str
+    psi: float
+    status: str  # "stable" | "watch" | "shifted"
+    recommendation: str
+    shares: list[CategoryShare]
+
+
+class DriftReportOut(BaseModel):
+    model_version: str | None
+    reference_window: dict[str, str]
+    live_window: dict[str, str]
+    n_reference: int
+    n_live: int
+    overall_status: str  # "stable" | "watch" | "shifted"
+    numeric_features: list[NumericDriftRow]
+    categorical_features: list[CategoricalDriftRow]

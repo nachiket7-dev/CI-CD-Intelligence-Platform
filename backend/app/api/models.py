@@ -8,11 +8,24 @@ from sqlalchemy.orm import Session
 
 from ..db import get_session
 from ..orm import ModelRecord
-from ..schemas import ModelOut, ReportOut, TrackerOut, TrainRequest
+from ..realdata import get_latest_realdata
+from ..schemas import (
+    AblationIn,
+    AblationOut,
+    ModelOut,
+    RealDataReportOut,
+    ReportOut,
+    SweepOut,
+    SweepRequest,
+    TrackerOut,
+    TrainRequest,
+)
+from ..services_ablation import create_ablation, get_latest_ablation
 from ..services_data import NotFound
 from ..services_models import get_model, predict_payload, promote, tracker, train
+from ..services_sweep import create_sweep, get_latest_sweep
 from .deps import SettingsDep
-from .serializers import model_out, report_out
+from .serializers import ablation_out, model_out, realdata_out, report_out, sweep_out
 
 router = APIRouter(tags=["models"])
 DB = Annotated[Session, Depends(get_session)]
@@ -41,6 +54,52 @@ def latest_report(db: DB) -> ReportOut:
     if record is None:
         raise NotFound("No evaluation report yet. Train a model first.")
     return report_out(record)
+
+
+@router.get("/reports/ablation", response_model=AblationOut)
+def latest_ablation_report(db: DB) -> AblationOut:
+    return ablation_out(get_latest_ablation(db))
+
+
+@router.get("/reports/realdata", response_model=RealDataReportOut)
+def latest_realdata_report(db: DB) -> RealDataReportOut:
+    return realdata_out(get_latest_realdata(db))
+
+
+@router.post("/reports/ablation", response_model=AblationOut)
+def run_ablation_report(
+    body: AblationIn,
+    db: DB,
+    settings: SettingsDep,
+) -> AblationOut:
+    return ablation_out(
+        create_ablation(
+            db,
+            settings,
+            seeds=body.seeds,
+            runs_per_scenario=body.runs_per_scenario,
+            candidate=body.candidate,
+        )
+    )
+
+
+@router.post("/reports/sweep", response_model=SweepOut)
+def run_sweep_report(body: SweepRequest, db: DB, settings: SettingsDep) -> SweepOut:
+    return sweep_out(
+        create_sweep(
+            db,
+            settings,
+            seeds=body.seeds,
+            runs_per_scenario=body.runs_per_scenario,
+            candidate=body.candidate,
+        )
+    )
+
+
+@router.get("/reports/sweeps/latest", response_model=SweepOut)
+@router.get("/reports/sweep/latest", response_model=SweepOut)
+def latest_sweep_report(db: DB) -> SweepOut:
+    return sweep_out(get_latest_sweep(db))
 
 
 @router.get("/reports/{model_id}", response_model=ReportOut)

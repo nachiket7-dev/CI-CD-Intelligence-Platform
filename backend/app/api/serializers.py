@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-from ..orm import ModelRecord, Run
+from ..orm import AblationRecord, ModelRecord, RealDataRecord, Run, SweepRecord
 from ..schemas import (
+    AblationOut,
     ModelOut,
     OutcomeOut,
     PredictionOut,
+    RealDataReportOut,
     ReportOut,
     RunDetailOut,
     RunOut,
+    SweepOut,
     TrailEvent,
 )
 
@@ -90,4 +93,53 @@ def model_out(record: ModelRecord) -> ModelOut:
 
 
 def report_out(record: ModelRecord) -> ReportOut:
-    return ReportOut(model=model_out(record), **record.report)
+    rep = dict(record.report)
+    generalisation = rep.pop("generalisation", None)
+    return ReportOut(model=model_out(record), generalisation=generalisation, **rep)
+
+
+def sweep_out(record: SweepRecord) -> SweepOut:
+    return SweepOut(
+        id=record.id,
+        created_at=record.created_at,
+        seeds=record.seeds,
+        runs_per_scenario=record.runs_per_scenario,
+        candidate=record.candidate,
+        precision_target=record.precision_target,
+        gate_pass_rate=record.gate_pass_rate,
+        passed_seeds=record.passed_seeds,
+        metrics=record.metrics,
+        leave_one_out=getattr(record, "leave_one_out", []) or [],
+    )
+
+
+def ablation_out(record: AblationRecord) -> AblationOut:
+    return AblationOut(
+        id=record.id,
+        created_at=record.created_at,
+        seeds=record.seeds,
+        runs_per_scenario=record.runs_per_scenario,
+        candidate=record.candidate,
+        full_model_pr_auc=record.full_model_pr_auc,
+        groups=record.groups,
+        deliberate_leak=record.deliberate_leak,
+    )
+
+
+def realdata_out(record: RealDataRecord) -> RealDataReportOut:
+    return RealDataReportOut(
+        id=record.id,
+        created_at=record.created_at,
+        dataset_name=record.dataset_name,
+        doi=record.doi,
+        licence=record.licence,
+        total_rows=record.total_rows,
+        candidate=record.candidate,
+        metrics=record.metrics,
+        gate=record.gate,
+        thresholds=record.thresholds,
+        importances=record.importances,
+        available_features=record.available_features,
+        missing_contract_features=record.missing_contract_features,
+        dropped_columns=record.dropped_columns,
+    )

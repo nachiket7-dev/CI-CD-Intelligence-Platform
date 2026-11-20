@@ -18,6 +18,7 @@ from .ml.evaluate import reliability_points
 from .ml.explain import top_signals
 from .ml.features import build_features
 from .ml.pipeline import run_experiment
+from .ml.tracking import log_model_training
 from .orm import ModelRecord, Outcome, Prediction, Run
 from .services_data import DomainError, NotFound, finished_runs_frame
 
@@ -55,6 +56,31 @@ def train(db: Session, settings: Settings, candidate: str, seed: int) -> ModelRe
     path = registry.save_bundle(
         settings.models_dir, version, {"model": exp.model, "reference": exp.reference, "version": version}
     )
+    generalisation = []
+    if frame["repo"].nunique() > 1:
+        for repo in sorted(frame["repo"].unique()):
+            try:
+                exp_h = run_experiment(
+                    frame,
+                    seed=seed,
+                    candidate_kind=candidate,
+                    holdout_repo=repo,
+                    precision_target=settings.precision_target,
+                    gate_margin=settings.gate_margin,
+                    brier_tolerance=settings.brier_tolerance,
+                    rolling_window=settings.rolling_window,
+                )
+                generalisation.append(
+                    {
+                        "scenario": repo,
+                        "majority_pr_auc": exp_h.metrics["majority"]["pr_auc"],
+                        "logreg_pr_auc": exp_h.metrics["logreg"]["pr_auc"],
+                        "candidate_pr_auc": exp_h.metrics["candidate"]["pr_auc"],
+                    }
+                )
+            except ValueError:
+                pass
+
     record = ModelRecord(
         version=version,
         algo=candidate,
@@ -71,6 +97,7 @@ def train(db: Session, settings: Settings, candidate: str, seed: int) -> ModelRe
             "thresholds": exp.thresholds,
             "pr_curves": exp.pr_curves,
             "reliability": exp.reliability,
+            "generalisation": generalisation,
         },
         importances=exp.importances,
         reference=exp.reference,
@@ -79,6 +106,20 @@ def train(db: Session, settings: Settings, candidate: str, seed: int) -> ModelRe
     )
     db.add(record)
     db.commit()
+
+    log_model_training(
+        settings,
+        version=version,
+        algo=candidate,
+        seed=seed,
+        metrics=exp.metrics,
+        gate=exp.gate.to_dict(),
+        artifact_path=path,
+        n_train=exp.n_train,
+        n_val=exp.n_val,
+        n_test=exp.n_test,
+    )
+
     return record
 
 

@@ -97,3 +97,56 @@ class Prediction(Base):
 
     run: Mapped[Run] = relationship(back_populates="predictions")
     model: Mapped[ModelRecord] = relationship()
+
+
+class SweepRecord(Base):
+    """Result of an in-memory sweep of baselines vs candidate over several seeds."""
+
+    __tablename__ = "sweeps"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    seeds: Mapped[int] = mapped_column(Integer)
+    runs_per_scenario: Mapped[int] = mapped_column(Integer)
+    candidate: Mapped[str] = mapped_column(String(40))
+    precision_target: Mapped[float] = mapped_column(Float)
+    gate_pass_rate: Mapped[float] = mapped_column(Float)
+    passed_seeds: Mapped[int] = mapped_column(Integer)
+    metrics: Mapped[dict[str, Any]] = mapped_column(JSON)
+    leave_one_out: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+
+
+class AblationRecord(Base):
+    """Result of feature ablation study and deliberate leakage verification."""
+
+    __tablename__ = "ablations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    seeds: Mapped[int] = mapped_column(Integer)
+    runs_per_scenario: Mapped[int] = mapped_column(Integer)
+    candidate: Mapped[str] = mapped_column(String(40))
+    full_model_pr_auc: Mapped[dict[str, float]] = mapped_column(JSON)
+    groups: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+    deliberate_leak: Mapped[dict[str, Any]] = mapped_column(JSON)
+
+
+class RealDataRecord(Base):
+    """Result of an evaluation check on the public real-world CI/CD dataset."""
+
+    __tablename__ = "realdata_reports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    dataset_name: Mapped[str] = mapped_column(String(120))
+    doi: Mapped[str] = mapped_column(String(60))
+    licence: Mapped[str] = mapped_column(String(40))
+    total_rows: Mapped[int] = mapped_column(Integer)
+    candidate: Mapped[str] = mapped_column(String(40))
+    metrics: Mapped[dict[str, Any]] = mapped_column(JSON)
+    gate: Mapped[dict[str, Any]] = mapped_column(JSON)
+    thresholds: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+    importances: Mapped[dict[str, float]] = mapped_column(JSON)
+    available_features: Mapped[list[str]] = mapped_column(JSON)
+    missing_contract_features: Mapped[list[dict[str, str]]] = mapped_column(JSON)
+    dropped_columns: Mapped[list[str]] = mapped_column(JSON)
